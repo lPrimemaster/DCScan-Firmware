@@ -1,4 +1,7 @@
 # DCScan-Firmware
+
+This README is out of date!!
+
 This repository contains firmware for various hardware modules present in the DCScan system.
 
 # Modules

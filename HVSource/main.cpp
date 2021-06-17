@@ -1,6 +1,8 @@
 #include "mbed.h"
+#include "BufferedSerial.h"
 #include "USBSerial.h"
 #include <iostream>
+#include <stdarg.h>
 
 // The original author is someone (unkown) from the University of Aveiro.
 // This code is, however, heavily modified to be adapted to work with both an LCD and Serial COM at the same time.
@@ -20,23 +22,32 @@
 // Serial Commands Formating : sCCv\n 
 // (s = HV source numbered in the back [1,2], CC = Two commands characters (see command table below), v = command specific value) 
 
-/*
- *   SOURCE | COMMAND |     VALUE    | DESCRIPTION
- *     1/2       PO       int or '?'         
- *
- *
- *
- */
-
 // Examples 
 // Powering HV Source 1 On                   - 1PO1\n
 // Setting max current on Source 2 to 150 uA - 2SI150.0\n
 // Setting target voltage on Source 2 to 2kV - 2SV2000\n
 // Get last error string                     - 1EE0\n
 
+void wait(float v)
+{
+    ThisThread::sleep_for(std::chrono::milliseconds((long)(v * 1000)));
+}
 
+void wait_ms(float v)
+{
+    ThisThread::sleep_for(std::chrono::milliseconds((long)(v)));
+}
+
+#define SERIAL_STOP_BYTE 'S'
+
+#define VSERIAL
+
+#ifndef VSERIAL
+BufferedSerial pc_serial(USBTX, USBRX);
+#else
 USBSerial pc_serial;
-Serial lcd(PB_10,PC_5);
+#endif
+BufferedSerial lcd(PB_10,PC_5);
 SPI spi(PA_7, PA_6, PA_5); // mosi, miso, sclk
 
 DigitalOut cs(PB_5);
@@ -237,29 +248,43 @@ bool checkImax(float hg, float hf)
 
 void final()
 {
-    lcd.putc(0xFF);
-    lcd.putc(0xFF);
-    lcd.putc(0xFF);
+    char data = 0xFF;
+    lcd.write(&data, 1);
+    lcd.write(&data, 1);
+    lcd.write(&data, 1);
 }
 
 void updateLCDRealValues(int v1, int v2, float i1, float i2)
 {
-    lcd.printf("page0.v1r.val=%d", v1); final();
-    lcd.printf("page0.v2r.val=%d", v2); final();
+    char data[128];
+    sprintf(data, "page0.v1r.val=%d", v1);
+    lcd.write(data, strlen(data)); final();
+    //lcd.printf("page0.v1r.val=%d", v1);
+
+    sprintf(data, "page0.v2r.val=%d", v2);
+    lcd.write(data, strlen(data)); final();
+    //lcd.printf("page0.v2r.val=%d", v2);
+
     
-    lcd.printf("page0.i1r.val=%d", (int)(i1 * 100)); final();
-    lcd.printf("page0.i2r.val=%d", (int)(i2 * 100)); final();
+    sprintf(data, "page0.i1r.val=%d", (int)(i1 * 100));
+    lcd.write(data, strlen(data)); final();
+    //lcd.printf("page0.i1r.val=%d", (int)(i1 * 100));
+
+    sprintf(data, "page0.i2r.val=%d", (int)(i2 * 100));
+    lcd.write(data, strlen(data)); final();
+    //lcd.printf("page0.i2r.val=%d", (int)(i2 * 100));
 }
 
 #define LCD_TARGET_KEEP -100
 
 void updateLCDTargetValues(int v1, int v2, float i1, float i2)
 {
-    if(v1 > -1) { lcd.printf("page0.v1t.val=%d", v1); final(); }
-    if(v2 > -1) { lcd.printf("page0.v2t.val=%d", v2); final(); }
+    char data[128];
+    if(v1 > -1) { sprintf(data, "page0.v1t.val=%d", v1); lcd.write(&data, strlen(data)); final(); }
+    if(v2 > -1) { sprintf(data, "page0.v2t.val=%d", v2); lcd.write(&data, strlen(data)); final(); }
     
-    if(i1 > -1) { lcd.printf("page0.i1t.val=%d", (int)(i1 * 100)); final(); }
-    if(i2 > -1) { lcd.printf("page0.i2t.val=%d", (int)(i2 * 100)); final(); }
+    if(i1 > -1) { sprintf(data, "page0.i1t.val=%d", (int)(i1 * 100)); lcd.write(&data, strlen(data)); final(); }
+    if(i2 > -1) { sprintf(data, "page0.i2t.val=%d", (int)(i2 * 100)); lcd.write(&data, strlen(data)); final(); }
 }
 
 int convertSource(uint8_t m)
@@ -284,7 +309,7 @@ float getValue()
     
     int i = 0;
     
-    while(v != 'S')
+    while(v != SERIAL_STOP_BYTE)
     {
         s[i++] = v;
         v = pc_serial._getc();
@@ -296,7 +321,7 @@ float getValue()
 
 void powerOnOff(int source, int value)
 {
-    if(value == 0 || value == 1)
+    if(value >= 0)
     {
         switch(source)
         {
@@ -328,11 +353,19 @@ void powerOnOff(int source, int value)
         switch(source)
         {
             case 1:
-                pc_serial.printf("%d\n\r", en1.read());
-                break;
+            {
+                char data[128];
+                sprintf(data, "%d\r\n", en1.read());
+                pc_serial.write(data, strlen(data));
+            }
+            break;
             case 2:
-                pc_serial.printf("%d\n\r", en2.read());
-                break;
+            {
+                char data[128];
+                sprintf(data, "%d\r\n", en2.read());
+                pc_serial.write(data, strlen(data));
+            }
+            break;
             default:
                 break;
         }
@@ -371,11 +404,19 @@ void setVoltage(int source, int value)
         switch(source)
         {
             case 1:
-                pc_serial.printf("%.2f\n\r", convertVmon(averageV(val2)));
-                break;
+            {
+                char data[128];
+                sprintf(data, "%.2f\r\n", convertVmon(averageV(val2)));
+                pc_serial.write(data, strlen(data));
+            }
+            break;
             case 2:
-                pc_serial.printf("%.2f\n\r", convertVmon(averageV(val4)));
-                break;
+            {
+                char data[128];
+                sprintf(data, "%.2f\r\n", convertVmon(averageV(val4)));
+                pc_serial.write(data, strlen(data));
+            }
+            break;
             default:
                 break;
         }
@@ -414,11 +455,19 @@ void setCurrent(int source, float value)
         switch(source)
         {
             case 1:
-                pc_serial.printf("%.2f\n\r", averageI(val1));
-                break;
+            {
+                char data[128];
+                sprintf(data, "%.2f\r\n", averageI(val1));
+                pc_serial.write(data, strlen(data));
+            }
+            break;
             case 2:
-                pc_serial.printf("%.2f\n\r", averageI(val3));
-                break;
+            {
+                char data[128];
+                sprintf(data, "%.2f\r\n", averageI(val3));
+                pc_serial.write(data, strlen(data));
+            }
+            break;
             default:
                 break;
         }
@@ -427,47 +476,64 @@ void setCurrent(int source, float value)
 
 void getLastError()
 {
-    pc_serial.printf("Last Error: %s\n\r", last_error);
+    char data[256];
+    sprintf(data, "Last Error: %s\r\n", last_error);
+    pc_serial.write(data, strlen(data));
 }
 
 void serialCB()
 {
-    uint16_t cmd;
-    int source = convertSource(pc_serial._getc());
-    pc_serial.printf("Got source (%d).\n\r", source);
-    cmd  = pc_serial._getc() << 8;
-    cmd |= pc_serial._getc();
-    pc_serial.printf("Got cmd (%#04x).\n\r", cmd);
-    float value = getValue();
-    pc_serial.printf("Got value (%f).\n\r", value);
-    
-    if(source == 0)
+    static int source = 0;
+    static uint16_t cmd = 0;
+    static uint8_t state = 0;
+
+    if(state == 0 && pc_serial.readable())
     {
-        strcpy(last_error, "Command error. Specified source not available. Possible values [1, 2].");
-        return;
+        source = convertSource(pc_serial._getc());
+        ++state;
+    }
+
+    if(state == 1 && pc_serial.readable())
+    {
+        cmd  = pc_serial._getc() << 8;
+        cmd |= pc_serial._getc();
+        ++state;
     }
     
-    switch(cmd)
+    if(state == 2 && pc_serial.readable())
     {
-        case 0x504F: // PO - Set/Get Power On/Off
-            powerOnOff(source, (int)value);
-            break;
-        case 0x5356: // SV - Set/Get Voltage
-            setVoltage(source, (int)value);
-            break;
-        case 0x5349: // SI - Set/Get Current
-            setCurrent(source, value);
-            break;
-        case 0x4545: // EE - Get Last Error String
-            getLastError();
-            break;
-        default:
-            sprintf(last_error, "Comand [%c%c] not recognized.", (char)(cmd >> 8 & 0xFF), (char)(cmd & 0xFF));
-            break;
+        float value = getValue(); // WARNING : This blocks!
+        pc_serial.printf("Got cmd (%d_%#04x_%f).\n\r", source, cmd, value);
+        state = 0;
+
+        if(source == 0)
+        {
+            strcpy(last_error, "Command error. Specified source not available. Possible values [1, 2].");
+            return;
+        }
+        
+        switch(cmd)
+        {
+            case 0x504F: // PO - Set/Get Power On/Off
+                powerOnOff(source, (int)value);
+                break;
+            case 0x5356: // SV - Set/Get Voltage
+                setVoltage(source, (int)value);
+                break;
+            case 0x5349: // SI - Set/Get Current
+                setCurrent(source, value);
+                break;
+            case 0x4545: // EE - Get Last Error String
+                getLastError();
+                break;
+            default:
+                sprintf(last_error, "Comand [%c%c] not recognized.", (char)(cmd >> 8 & 0xFF), (char)(cmd & 0xFF));
+                break;
+        }
     }
 }
 
-void updateLCD_irq()
+void updateLCD()
 {
     cs = 0;
         
@@ -476,6 +542,7 @@ void updateLCD_irq()
     float ref_imon_value2 = averageI(val3);
     float ref_vmon_value2 = convertVmon(averageV(val4));
     
+    // NOTE : Or use an interrupt
     updateLCDRealValues((int)ref_vmon_value1, (int)ref_vmon_value2, ref_imon_value1, ref_imon_value2);
 
     if (en1)
@@ -489,27 +556,34 @@ void updateLCD_irq()
     }
 }
 
-Ticker irq_lcd;
-
 void startSignal()
 {
     myRGBled.write(0.0f, 0.0f, 1.0f);
-    wait(0.5);
+    wait(0.15);
     myRGBled.write(0.0f, 0.0f, 0.0f);
-    wait(0.5);
+    wait(0.15);
     myRGBled.write(0.0f, 1.0f, 0.0f);
-    wait(0.5);
+    wait(0.15);
     myRGBled.write(0.0f, 0.0f, 0.0f);
-    wait(0.5);
+    wait(0.15);
     myRGBled.write(1.0f, 0.0f, 0.0f);
-    wait(0.5);
+    wait(0.15);
     myRGBled.write(0.0f, 0.0f, 0.0f);
 }
 
 int main()
 {
+    #ifndef VSERIAL
+    pc_serial.set_baud(9600);
+    pc_serial.set_format(
+        /* bits */ 8,
+        /* parity */ BufferedSerial::None,
+        /* stop bit */ 1
+    );
+    #endif
+
     startSignal();
-    
+
     cs = 1;
     en1 = 0;
     en2 = 0;
@@ -518,13 +592,60 @@ int main()
     
     strcpy(last_error, "No error.");
     
-    //pc_serial.attach(&serialCB);
-    irq_lcd.attach(&updateLCD_irq, 1.0);
-    
-    while(true)
+    while(true) 
     {
         serialCB();
+        updateLCD();
+        //wait(0.1);
     }
-    
-    return 0;
 }
+
+
+// class RGBLed
+// {
+// public:
+//     RGBLed(PinName redpin, PinName greenpin, PinName bluepin);
+//     void write(float red,float green, float blue);
+// private:
+//     PwmOut _redpin;
+//     PwmOut _greenpin;
+//     PwmOut _bluepin;
+// };
+
+// RGBLed::RGBLed (PinName redpin, PinName greenpin, PinName bluepin)
+//     : _redpin(redpin), _greenpin(greenpin), _bluepin(bluepin)
+// {
+//     //50Hz PWM clock default a bit too low, go to 2000Hz (less flicker)
+//     _redpin.period(0.0005);
+// }
+
+// void RGBLed::write(float red,float green, float blue)
+// {
+//     _redpin = red;
+//     _greenpin = green;
+//     _bluepin = blue;
+// }
+
+// //Setup RGB led using PWM pins and class
+// RGBLed myRGBled(PB_9,PB_8,PB_6); //RGB PWM pins
+
+// int main()
+// {
+//     USBSerial pc_serial;
+//     float red = 1.0f;
+
+//     myRGBled.write(0.0f, 1.0f, 0.0f);
+
+//     ThisThread::sleep_for(500ms);
+
+//     myRGBled.write(0.0f, 0.0f, 0.0f);
+
+//     // In the end my program only accesses these functions of the serial
+//     while(true)
+//     {
+//         pc_serial.printf("%c\r\n", pc_serial._getc());
+//         red = 1.0f - red;
+//         myRGBled.write(red, 0.0f, 0.0f);
+//         //ThisThread::sleep_for(500ms);
+//     }
+// }

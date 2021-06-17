@@ -1,5 +1,6 @@
+.mbed
+*.py*
+
 __pycache__/
-.vscode/
 BUILD/
-
-
+.vscode/
