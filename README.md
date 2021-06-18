@@ -24,7 +24,7 @@ Syntax: `nCCv<eoc byte>`
 |:-:|:-:|:-:|:-:|:-:|:-:|
 | PO | Switches power supply `n` on/off. | `int` `1` or `2` | `int` `0` - off<br/>`int` `1` - on<br/>`char` `?` - get status | `int` - `0` or `1` | Set source 1 on - `1PO1\r`<br/>Ask source 2 status - `2PO?\r` |
 | SV | Set/Get power supply `n` target voltage. | `int` `1` or `2` | `int` `0` to `2400` - set voltage<br/>`char` `?` - get voltage | `int` - `0` to `2400` | Set source 1 target voltage to 1200V - `1SV1200\r`<br/>Ask source 2 current target voltage - `2SV?\r` |
-| SI | Set/Get power supply `n` target current. | `int` `1` or `2` | `float` `0` to `500` - set voltage<br/>`char` `?` - get voltage | `float` - `0` to `500` | Set source 1 target current to 3.50uA - `1SV3.5\r`<br/>Ask source 2 current target current - `2SI?\r` |
+| SI | Set/Get power supply `n` target current. | `int` `1` or `2` | `float` `0` to `500` - set current<br/>`char` `?` - get current | `float` - `0` to `500` | Set source 1 target current to 3.50uA - `1SV3.5\r`<br/>Ask source 2 current target current - `2SI?\r` |
 | EE | Get last global error. | Don't care | Don't care | `char[]` - string with last error description | Get last error - `0EE0\r` or `nEEx\r`<br/>for any `n` `int` and any `x` `float/int` |
 
 
