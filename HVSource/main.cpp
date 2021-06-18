@@ -38,7 +38,7 @@ void wait_ms(float v)
     ThisThread::sleep_for(std::chrono::milliseconds((long)(v)));
 }
 
-#define SERIAL_STOP_BYTE 'S'
+#define SERIAL_STOP_BYTE '\r'
 
 #define VSERIAL
 
